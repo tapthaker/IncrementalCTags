@@ -13,6 +13,8 @@ SUPPORTED_FILES_REGEX="(.*\.py|.*\.m|.*\.c|.*\.h|.*\.swift)$"
 REPO_CACHE="$CTAGS_CACHE/$REPO_ROOT/"
 LAST_RUN_HASH_FILE="$REPO_CACHE/.tags_last_run_hash"
 SQLITE_DB="$REPO_CACHE/tags.sqlite"
+PREV_PROGRESS=0
+LOCK_FILE="$REPO_CACHE/incremental_ctags.lock"
 
 if [ ! -d "$REPO_CACHE" ]; then
   mkdir -p "$REPO_CACHE"
@@ -20,11 +22,17 @@ fi
 
 print_progress() {
   number_of_bars=40
+  progress=$1
+  if [ "$progress" -ne $PREV_PROGRESS ]; then
+    PREV_PROGRESS=$progress
+  else
+    return
+  fi
   done=$((number_of_bars * $1 / 100))
   left=$((number_of_bars - done ))
   done_str=$(printf "%${done}s")
   empty_str=$(printf "%${left}s")
-  printf "\rProgress: [${done_str// /X}${empty_str// /-}] %d%%" "$1"
+  printf "\nProgress: [${done_str// /X}${empty_str// /-}] %d%%" "$1"
 }
 
 create_sqlite_db() {
@@ -51,7 +59,16 @@ insert_in_sqlite_db() {
 
 
 generate_tags() {
+
+  if [ -f "$LOCK_FILE" ]; then
+    printf "Error: %s is present.\nLooks like you are already generating ctags in an another process. If the problem persists, please remove %s and retry\n" "$LOCK_FILE" "$LOCK_FILE"
+    exit 1
+  else
+    touch "$LOCK_FILE"
+    trap 'rm -f "$LOCK_FILE"' EXIT INT QUIT TERMINATE
+  fi
   SECONDS=0
+
   all_directories=$(mktemp -t process_dirs)
   cat /dev/stdin > "$all_directories"
   total_dirs=$(wc -l < "$all_directories")

@@ -1,14 +1,17 @@
-
-
 let s:path = expand('<sfile>:p:h')
 let s:generate_ctags_shell = s:path."/../generate_ctags.sh"
 
-function!BackgroundCommandClose(channel)
- execute ':bd IncrementalCTags'
+function!BackgroundCommandExit(job, status)
+ if a:status == 0
+   execute ':bd IncrementalCTags'
+ endif
 endfunction
 
 function! RunBackgroundCommand(command)
-    call job_start(a:command, {'close_cb': 'BackgroundCommandClose', 'out_io': 'buffer', 'out_name': 'IncrementalCTags'})
+    if bufwinnr('IncrementalCTags') > 0
+      execute ':bd IncrementalCTags'
+    endif
+    call job_start(a:command, {'exit_cb': 'BackgroundCommandExit', 'out_io': 'buffer', 'out_name': 'IncrementalCTags'})
     split | buffer IncrementalCTags
 endfunction
 
